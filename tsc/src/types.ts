@@ -41,4 +41,41 @@ export namespace RequestTypes {
         raster: ImageData,
         turdSize: number,
     }
+    export type RenderGcodeRequest = {
+        type: 'renderGcode',
+        gcode: string,
+        width: number,
+        height: number,
+        homeX: number,
+        homeY: number,
+    };
+}
+
+// Добавляем функцию проверки G-code запроса
+export function isRenderGcodeRequest(obj: any): obj is RequestTypes.RenderGcodeRequest {
+    if (!('type' in obj) || obj.type !== 'renderGcode') {
+        return false;
+    }
+
+    if (!('gcode' in obj) || typeof obj.gcode !== 'string') {
+        return false;
+    }
+
+    if (!('width' in obj) || typeof obj.width !== 'number') {
+        return false;
+    }
+
+    if (!('height' in obj) || typeof obj.height !== 'number') {
+        return false;
+    }
+
+    if (!('homeX' in obj) || typeof obj.homeX !== 'number') {
+        return false;
+    }
+
+    if (!('homeY' in obj) || typeof obj.homeY !== 'number') {
+        return false;
+    }
+
+    return true;
 }
