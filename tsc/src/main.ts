@@ -1,35 +1,44 @@
-import { renderCommandsToSvgJson } from "./toSvgJson";
-import { renderSvgJsonToCommands } from "./toCommands";
+// main.ts
+import { renderCommandsToSvgJson } from './toSvgJson';
+import { renderSvgJsonToCommands } from './toCommands';
 import { vectorizeImageData } from './vectorizer';
-import { InfillDensities, RequestTypes } from "./types";
-import { isRenderGcodeRequest } from "./types";
+import { InfillDensities, RequestTypes, isRenderGcodeRequest } from './types';
 import { parseGcodeToCommands } from './gcodeParser';
-
+import { measureDistance } from './measurer';
+import { stringifyCommand } from './toCommands';
 
 const updateStatusFn = (status: string) => {
     self.postMessage({
-        type: "status",
+        type: 'status',
         payload: status,
     });
 };
 
 self.onmessage = async (e: MessageEvent<any>) => {
-    if (isVectorizeRequest(e.data)) {
-        vectorize(e.data);
-    } else if (isRenderSvgRequest(e.data)) {
-        await render(e.data);
-    } else if (isRenderGcodeRequest(e.data)) {  // <-- ДОБАВИТЬ
-        await renderGcode(e.data);              // <-- ДОБАВИТЬ
-    } else {
-        throw new Error("Bad request");
+    try {
+        if (isVectorizeRequest(e.data)) {
+            vectorize(e.data);
+        } else if (isRenderSvgRequest(e.data)) {
+            await render(e.data);
+        } else if (isRenderGcodeRequest(e.data)) {
+            await renderGcode(e.data);
+        } else {
+            throw new Error(`Bad request type: ${e.data?.type}`);
+        }
+    } catch (error) {
+        console.error('Worker error:', error);
+        self.postMessage({
+            type: 'error',
+            payload: error.message,
+        });
     }
 };
 
 function vectorize(request: RequestTypes.VectorizeRequest) {
-    updateStatusFn("Vectorizing");
+    updateStatusFn('Vectorizing');
     const svgString = vectorizeImageData(request.raster, request.turdSize);
     self.postMessage({
-        type: "vectorizer",
+        type: 'vectorizer',
         payload: {
             svg: svgString,
         }
@@ -40,10 +49,10 @@ async function render(request: RequestTypes.RenderSVGRequest) {
     const renderResult = await renderSvgJsonToCommands(
         request,
         updateStatusFn,
-    )
+    );
     const resultSvgJson = renderCommandsToSvgJson(renderResult.commands, request.width, request.height, updateStatusFn);
     self.postMessage({
-        type: "renderer",
+        type: 'renderer',
         payload: {
             commands: renderResult.commands,
             svgJson: resultSvgJson,
@@ -54,27 +63,35 @@ async function render(request: RequestTypes.RenderSVGRequest) {
 }
 
 async function renderGcode(request: RequestTypes.RenderGcodeRequest) {
-    updateStatusFn("Parsing G-code");
-    
-    const commands = parseGcodeToCommands(request.gcode, request.width, request.height);
-    
-    updateStatusFn("Measuring total distance");
-    commands.unshift(`h${request.height}`);
-    const distances = measureDistance(commands);
-    const totalDistance = +distances.totalDistance.toFixed(1);
-    commands.unshift(`d${totalDistance}`);
-    
-    const resultSvgJson = renderCommandsToSvgJson(commands, request.width, request.height, updateStatusFn);
-    
-    self.postMessage({
-        type: "renderer",
-        payload: {
-            commands: commands.map(stringifyCommand),
-            svgJson: resultSvgJson,
-            distance: totalDistance,
-            drawDistance: +distances.drawDistance.toFixed(1),
+    try {
+        updateStatusFn('Parsing G-code');
+        
+        const commands = parseGcodeToCommands(request.gcode, request.width, request.height);
+        
+        if (commands.length === 0) {
+            throw new Error('No valid G-code commands found');
         }
-    });
+        
+        updateStatusFn('Measuring total distance');
+        commands.unshift(`h${request.height}`);
+        const distances = measureDistance(commands);
+        const totalDistance = +distances.totalDistance.toFixed(1);
+        commands.unshift(`d${totalDistance}`);
+        
+        const resultSvgJson = renderCommandsToSvgJson(commands, request.width, request.height, updateStatusFn);
+        
+        self.postMessage({
+            type: 'renderer',
+            payload: {
+                commands: commands.map(stringifyCommand),
+                svgJson: resultSvgJson,
+                distance: totalDistance,
+                drawDistance: +distances.drawDistance.toFixed(1),
+            }
+        });
+    } catch (error) {
+        throw new Error(`G-code processing failed: ${error.message}`);
+    }
 }
 
 function isVectorizeRequest(obj: any): obj is RequestTypes.VectorizeRequest {
@@ -92,7 +109,6 @@ function isVectorizeRequest(obj: any): obj is RequestTypes.VectorizeRequest {
 
     return true;
 }
-
 
 function isRenderSvgRequest(obj: any): obj is RequestTypes.RenderSVGRequest {
     if (!('type' in obj) || obj.type !== 'renderSvg') {
@@ -137,4 +153,3 @@ function isRenderSvgRequest(obj: any): obj is RequestTypes.RenderSVGRequest {
 
     return true;
 }
-

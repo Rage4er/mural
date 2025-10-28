@@ -1,6 +1,13 @@
 // gcodeParser.ts
 import { Command } from './types';
 
+/**
+ * Парсит G-code в команды Mural
+ * @param gcode - G-code строка
+ * @param width - Ширина рабочей области (мм)
+ * @param height - Высота рабочей области (мм) 
+ * @returns Массив команд для выполнения
+ */
 export function parseGcodeToCommands(gcode: string, width: number, height: number): Command[] {
     const commands: Command[] = [];
     const lines = gcode.split('\n');
@@ -27,6 +34,12 @@ export function parseGcodeToCommands(gcode: string, width: number, height: numbe
                     const x = parseCoord(parts, 'X', currentX, absolutePositioning);
                     const y = parseCoord(parts, 'Y', currentY, absolutePositioning);
                     
+                    // Валидация координат
+                    if (x < 0 || x > width || y < 0 || y > height) {
+                        console.warn('Coordinate out of bounds: X=' + x + ', Y=' + y + '. Max: ' + width + 'x' + height);
+                        continue;
+                    }
+                    
                     // Если состояние пера изменилось - добавляем команду
                     if (penState !== isPenDown) {
                         commands.push(penState ? 'p1' : 'p0');
@@ -51,9 +64,11 @@ export function parseGcodeToCommands(gcode: string, width: number, height: numbe
                     
                 case 2:  // G2 - Clockwise arc
                 case 3:  // G3 - Counterclockwise arc
-                    // Пока пропускаем дуги, можно добавить позже
                     console.warn('Arc commands (G2/G3) not yet supported');
                     break;
+                    
+                default:
+                    console.warn('Unsupported G-code: G' + gCode);
             }
         }
     }
@@ -61,10 +76,15 @@ export function parseGcodeToCommands(gcode: string, width: number, height: numbe
     return commands;
 }
 
+/**
+ * Парсит координату из частей команды
+ */
 function parseCoord(parts: string[], axis: string, current: number, absolute: boolean): number {
     const coordPart = parts.find(p => p.startsWith(axis));
     if (!coordPart) return current;
     
     const value = parseFloat(coordPart.substring(1));
+    if (isNaN(value)) return current;
+    
     return absolute ? value : current + value;
 }

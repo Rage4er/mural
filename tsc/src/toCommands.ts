@@ -1,4 +1,4 @@
-import { Command, RequestTypes, updateStatusFn } from './types';
+﻿import { Command, RequestTypes, updateStatusFn } from './types';
 import { generatePaths } from './generator';
 import { generateInfills } from './infill';
 import { optimizePaths } from './optimizer';
@@ -66,10 +66,11 @@ export async function renderSvgJsonToCommands(
     };
 }
 
-function stringifyCommand(cmd: Command): string {
+export function stringifyCommand(cmd: Command): string {
     if (typeof cmd === 'string') {
         return cmd;
     } else {
         return `${cmd.x} ${cmd.y}`;
     }
 }
+
