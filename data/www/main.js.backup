@@ -583,14 +583,13 @@ function init() {
     svgControl.initSvgControl();
     $("#loadingSlide").show();
 
-
-    // === ЗАКОММЕНТИРОВАТЬ ЭТО ===
-// $.get("/getState", function(data) {
-//     adaptToState(data);
-// }).fail(function() {
-//     logger.error("Failed to retrieve state");
-//     alert("Failed to retrieve state");
-// });
+    $.get("/getState", function(data) {
+        adaptToState(data);
+    }).fail(function() {
+        logger.error("Failed to retrieve state");
+        alert("Failed to retrieve state");
+    });
+}
 
 function verifyUpload(state) {
     $.ajax({
@@ -645,26 +644,10 @@ function verifyUpload(state) {
     });
 }
 
-// === ВРЕМЕННЫЙ МОК ДЛЯ ТЕСТИРОВАНИЯ ФРОНТЕНДА ===
-function getMockState() {
-    return {
-        phase: "SvgSelect",
-        homeX: 100,
-        homeY: 100,
-        moving: false,
-        startedHoming: false
-    };
-}
-
 function adaptToState(state) {
     $(".muralSlide").hide();
     currentState = state;
     
-    // Для тестирования всегда показываем SVG загрузку
-    domCache.svgUploadSlide.show();
-    
-    // Раскомментируйте для полной эмуляции, когда понадобится:
-    /*
     switch(state.phase) {
         case "RetractBelts":
             $("#retractBeltsSlide").show();
@@ -694,23 +677,7 @@ function adaptToState(state) {
             logger.warn("Unrecognized phase", state.phase);
             alert("Unrecognized phase");
     }
-    */
 }
-
-// Закомментируем реальный запрос к бэкенду и используем мок
-// $.get("/getState", function(data) {
-//     adaptToState(data);
-// }).fail(function() {
-//     logger.error("Failed to retrieve state");
-//     alert("Failed to retrieve state");
-// });
-
-// Используем мок-данные для тестирования
-setTimeout(() => {
-    const mockState = getMockState();
-    adaptToState(mockState);
-    logger.info("Using mock state for frontend testing", mockState);
-}, 100);
 
 function getInfillDensity() {
     const density = parseInt(domCache.infillDensity.val());
@@ -727,5 +694,4 @@ function getTurdSize() {
 
 function getFlattenPaths() {
     return domCache.flattenPathsCheckbox.is(":checked");
-}
 }
