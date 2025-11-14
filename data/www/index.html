@@ -72,7 +72,9 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-throttle-debounce/1.1/jquery.ba-throttle-debounce.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/less" ></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.17/paper-full.min.js" integrity="sha512-NApOOz1j2Dz1PKsIvg1hrXLzDFd62+J0qOPIhm8wueAnk4fQdSclq6XvfzvejDs6zibSoDC+ipl1dC66m+EoSQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="main.js" type="module"></script>
+  <script src="svgControl.js"></script>
+  <script src="client.js"></script>
+  <script src="main.js"></script>
   <main class="form-signin w-100 m-auto">
       <div id="loadingSlide" class="muralSlide" style="display:none;">
         <div class="spinner-border mb-5 loading" role="status"></div>
@@ -129,7 +131,7 @@
                   <a class="up" href="#"></a>
                   <a class="right" href="#"></a>
                   <a class="down" href="#"></a>
-                  <a class="left" href="#"></a>  
+                  <a class="left" href="#"></a>
                 </nav>
               </div>
             </div>
@@ -144,6 +146,9 @@
           </div>
         </div>
         <input class="form-control form-control-lg mb-2" id="uploadSvg" type="file" accept=".svg">
+        <label for="uploadGcode" class="form-label mb-2">Or upload G-code file:</label>
+        <input class="form-control form-control-lg mb-2" id="uploadGcode" type="file" accept=".gcode,.nc">
+        <button type="button" class="btn btn-secondary mb-2 w-100" id="gcodeUploadBtn">Load G-code</button>
         <button class="w-100 btn btn-lg btn-primary mb-6" id="preview" disabled>Preview drawing</button>
       </div>
       <div id="chooseRendererSlide" class="muralSlide" style="display:none;">
@@ -209,7 +214,7 @@
       </div>
     </div>
   </div>
-  
+
 </body>
 
 </html>

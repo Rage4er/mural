@@ -1,38 +1,51 @@
-export async function leftRetractDown() {
-    await postCommand("l-ret");
+async function leftRetractDown() {
+  await postCommand("l-ret");
 }
 
-export async function leftExtendDown() {
-    await postCommand("l-ext");
+async function leftExtendDown() {
+  await postCommand("l-ext");
 }
 
-export async function rightRetractDown() {
-    await postCommand("r-ret");
+async function rightRetractDown() {
+  await postCommand("r-ret");
 }
 
-export async function rightExtendDown() {
-    await postCommand("r-ext");
+async function rightExtendDown() {
+  await postCommand("r-ext");
 }
 
-export async function leftRetractUp() {
-    await postCommand("l-0");
+async function leftRetractUp() {
+  await postCommand("l-0");
 }
 
-export async function leftExtendUp() {
-    await postCommand("l-0");
+async function leftExtendUp() {
+  await postCommand("l-0");
 }
 
-export async function rightRetractUp() {
-    await postCommand("r-0");
+async function rightRetractUp() {
+  await postCommand("r-0");
 }
 
-export async function rightExtendUp() {
-    await postCommand("r-0");
+async function rightExtendUp() {
+  await postCommand("r-0");
 }
 
 async function postCommand(command) {
-    $.post("/command", {command}).fail(function() {
-        alert("Command failed");
-        location.reload();
-    });
+  $.post("/command", { command }).fail(function () {
+    alert("Command failed");
+    location.reload();
+  });
 }
+
+// Expose as global for main.js
+window.client = {
+  leftRetractDown,
+  leftExtendDown,
+  rightRetractDown,
+  rightExtendDown,
+  leftRetractUp,
+  leftExtendUp,
+  rightRetractUp,
+  rightExtendUp,
+};
+console.log("client exported to window");

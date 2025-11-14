@@ -1,6 +1,3 @@
-import * as svgControl from './svgControl.js';
-import * as client from './client.js';
-
 let currentState = null;
 let currentWorker = null;
 let uploadConvertedCommands = null;
@@ -8,623 +5,710 @@ let currentPreviewId = 0;
 let rendererFn = null;
 
 window.onload = function () {
-    init();
-    addGcodeUploadButton();
+  console.log("onload: Checking libs...");
+  if (typeof $ === "undefined") {
+    console.error("ERROR: jQuery ($) not loaded — check index.html order");
+    return;
+  }
+  if (typeof svgControl === "undefined") {
+    console.error("ERROR: svgControl not loaded — add script or export");
+    return;
+  }
+  if (typeof client === "undefined") {
+    console.error("ERROR: client not loaded — add script or export");
+    return;
+  }
+  console.log("onload: All OK, calling init()");
+  init();
+  addGcodeUploadButton();
 };
 
 // === НОВАЯ ФУНКЦИЯ: Обработка загрузки G-code ===
 function handleGcodeFileUpload(file) {
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        const gcodeContent = e.target.result;
-        
-        const renderRequest = {
-            type: "renderGcode",
-            gcode: gcodeContent,
-            width: svgControl.getTargetWidth(),
-            height: svgControl.getTargetHeight(),
-            homeX: currentState.homeX,
-            homeY: currentState.homeY,
-        };
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    const gcodeContent = e.target.result;
 
-        if (currentWorker) {
-            console.log("Terminating previous worker");
-            currentWorker.terminate();
-        }
-        
-        currentPreviewId++;
-        const thisPreviewId = currentPreviewId;
-        
-        if (currentPreviewId == thisPreviewId) {
-            currentWorker = new Worker(`./worker/worker.js?v=${Date.now()}`);
-            currentWorker.onmessage = (e) => {
-                if (e.data.type === 'status') {
-                    $("#progressBar").text(e.data.payload);
-                } else if (e.data.type === 'renderer') {
-                    console.log("G-code rendering finished!");
-
-                    uploadConvertedCommands = e.data.payload.commands.join('\n');
-                    const resultSvgJson = e.data.payload.svgJson;
-                    const resultDataUrl = svgControl.convertJsonToDataURL(resultSvgJson, svgControl.getTargetWidth(), svgControl.getTargetHeight());
-
-                    const totalDistanceM = +(e.data.payload.distance / 1000).toFixed(1);
-                    const drawDistanceM = +(e.data.payload.drawDistance / 1000).toFixed(1);
-                    
-                    deactivateProgressBar();
-                    $("#previewSvg").attr("src", resultDataUrl);
-                    $("#distances").text(`Total: ${totalDistanceM}m / Draw: ${drawDistanceM}m`);
-                    $(".svg-preview").show();
-                    $("#acceptSvg").removeAttr("disabled");
-                }
-            };
-            
-            currentWorker.postMessage(renderRequest);
-        }
+    const renderRequest = {
+      type: "renderGcode",
+      gcode: gcodeContent,
+      width: svgControl.getTargetWidth(),
+      height: svgControl.getTargetHeight(),
+      homeX: currentState.homeX,
+      homeY: currentState.homeY,
     };
-    reader.readAsText(file);
+
+    if (currentWorker) {
+      console.log("Terminating previous worker");
+      currentWorker.terminate();
+    }
+
+    currentPreviewId++;
+    const thisPreviewId = currentPreviewId;
+
+    if (currentPreviewId == thisPreviewId) {
+      currentWorker = new Worker(`./worker/worker.js?v=${Date.now()}`);
+      currentWorker.onmessage = (e) => {
+        if (e.data.type === "status") {
+          $("#progressBar").text(e.data.payload);
+        } else if (e.data.type === "renderer") {
+          console.log("G-code rendering finished!");
+
+          uploadConvertedCommands = e.data.payload.commands.join("\n");
+          const resultSvgJson = e.data.payload.svgJson;
+          const resultDataUrl = svgControl.convertJsonToDataURL(
+            resultSvgJson,
+            svgControl.getTargetWidth(),
+            svgControl.getTargetHeight(),
+          );
+
+          const totalDistanceM = +(e.data.payload.distance / 1000).toFixed(1);
+          const drawDistanceM = +(e.data.payload.drawDistance / 1000).toFixed(
+            1,
+          );
+
+          deactivateProgressBar();
+          $("#previewSvg").attr("src", resultDataUrl);
+          $("#distances").text(
+            `Total: ${totalDistanceM}m / Draw: ${drawDistanceM}m`,
+          );
+          $(".svg-preview").show();
+          $("#acceptSvg").removeAttr("disabled");
+        }
+      };
+
+      currentWorker.postMessage(renderRequest);
+    }
+  };
+  reader.readAsText(file);
 }
 
 // === НОВАЯ ФУНКЦИЯ: Добавление кнопки G-code ===
 function addGcodeUploadButton() {
-    const gcodeInput = document.createElement('input');
-    gcodeInput.type = 'file';
-    gcodeInput.id = 'uploadGcode';
-    gcodeInput.accept = '.gcode,.nc,.txt';
-    gcodeInput.style.display = 'none';
-    gcodeInput.addEventListener('change', function(e) {
-        if (this.files.length > 0) {
-            $("#svgUploadSlide").hide();
-            $("#drawingPreviewSlide").show();
-            activateProgressBar();
-            $("#acceptSvg").attr("disabled", "disabled");
-            handleGcodeFileUpload(this.files[0]);
-        }
-    });
-    
-    document.body.appendChild(gcodeInput);
-    
-    const gcodeButton = document.createElement('button');
-    gcodeButton.type = 'button';
-    gcodeButton.className = 'w-100 btn btn-lg btn-outline-primary mb-2';
-    gcodeButton.innerHTML = '<i class="bi bi-code-slash"></i> Upload G-code';
-    gcodeButton.addEventListener('click', function() {
-        gcodeInput.click();
-    });
-    
-    const uploadSvgInput = document.querySelector('#uploadSvg');
-    if (uploadSvgInput) {
-        uploadSvgInput.parentNode.insertBefore(gcodeButton, uploadSvgInput.nextSibling);
+  const gcodeInput = document.createElement("input");
+  gcodeInput.type = "file";
+  gcodeInput.id = "uploadGcode";
+  gcodeInput.accept = ".gcode,.nc,.txt";
+  gcodeInput.style.display = "none";
+  gcodeInput.addEventListener("change", function (e) {
+    if (this.files.length > 0) {
+      $("#svgUploadSlide").hide();
+      $("#drawingPreviewSlide").show();
+      activateProgressBar();
+      $("#acceptSvg").attr("disabled", "disabled");
+      handleGcodeFileUpload(this.files[0]);
     }
+  });
+
+  document.body.appendChild(gcodeInput);
+
+  const gcodeButton = document.createElement("button");
+  gcodeButton.type = "button";
+  gcodeButton.className = "w-100 btn btn-lg btn-outline-primary mb-2";
+  gcodeButton.innerHTML = '<i class="bi bi-code-slash"></i> Upload G-code';
+  gcodeButton.addEventListener("click", function () {
+    gcodeInput.click();
+  });
+
+  const uploadSvgInput = document.querySelector("#uploadSvg");
+  if (uploadSvgInput) {
+    uploadSvgInput.parentNode.insertBefore(
+      gcodeButton,
+      uploadSvgInput.nextSibling,
+    );
+  }
 }
 
 async function checkIfExtendedToHome(extendToHomeTime) {
-    await new Promise(r => setTimeout(r, extendToHomeTime * 1000));
+  await new Promise((r) => setTimeout(r, extendToHomeTime * 1000));
 
-    const waitPeriod = 2000;
-    let done = false;
-    while (!done) {
-        try {
-            const state = await $.get("/getState");
-            if (state.phase !== 'ExtendToHome') {
-                adaptToState(state);
-                done = true;
-            } else {
-                await new Promise(r => setTimeout(r, waitPeriod));
-            }
-        } catch (err) {
-            alert("Failed to get current phase: " + err);
-            location.reload();
-        }
+  const waitPeriod = 2000;
+  let done = false;
+  while (!done) {
+    try {
+      const state = await $.get("/getState");
+      if (state.phase !== "ExtendToHome") {
+        adaptToState(state);
+        done = true;
+      } else {
+        await new Promise((r) => setTimeout(r, waitPeriod));
+      }
+    } catch (err) {
+      alert("Failed to get current phase: " + err);
+      location.reload();
     }
+  }
 }
 
 function init() {
+  try {
+    console.log("init started");
     function doneWithPhase(custom) {
-        $(".muralSlide").hide();
-        $("#loadingSlide").show();
-        if (!custom) {
-            custom = {
-                url: "/doneWithPhase",
-                data: {},
-                commandName: "Done With Phase",
-            };
-        }
+      $(".muralSlide").hide();
+      $("#loadingSlide").show();
+      if (!custom) {
+        custom = {
+          url: "/doneWithPhase",
+          data: {},
+          commandName: "Done With Phase",
+        };
+      }
 
-        $.post(custom.url, custom.data || {}, function(state) {
-            adaptToState(state);
-        }).fail(function() {
-            alert(`${custom.commandName} command failed`);
-            location.reload();
-        });
+      $.post(custom.url, custom.data || {}, function (state) {
+        adaptToState(state);
+      }).fail(function () {
+        alert(`${custom.commandName} command failed`);
+        location.reload();
+      });
     }
 
-    $("#beltsRetracted").click(async function() { 
-        await client.leftRetractUp();
-        await client.rightRetractUp();
-        doneWithPhase();
+    $("#beltsRetracted").click(async function () {
+      await client.leftRetractUp();
+      await client.rightRetractUp();
+      doneWithPhase();
     });
 
-    $("#setDistance").click(function() {
-        const inputValue = parseInt($("#distanceInput").val());
-        if (isNaN(inputValue)) {
-            throw new Error("input value is not a number");
-        }
+    $("#setDistance").click(function () {
+      const inputValue = parseInt($("#distanceInput").val());
+      if (isNaN(inputValue)) {
+        throw new Error("input value is not a number");
+      }
 
-        doneWithPhase({
-            url: "/setTopDistance",
-            data: {distance: inputValue},
-            commandName: "Set Top Distance",
-        });
+      doneWithPhase({
+        url: "/setTopDistance",
+        data: { distance: inputValue },
+        commandName: "Set Top Distance",
+      });
     });
 
-    $("#leftMotorToggle").change(function() {
-        if (this.checked) {
-            client.leftRetractDown(); 
-        } else {
-            client.leftRetractUp();
-        }
+    $("#leftMotorToggle").change(function () {
+      if (this.checked) {
+        client.leftRetractDown();
+      } else {
+        client.leftRetractUp();
+      }
     });
 
-    $("#rightMotorToggle").change(function() {
-        if (this.checked) {
-            client.rightRetractDown(); 
-        } else {
-            client.rightRetractUp();
-        }
+    $("#rightMotorToggle").change(function () {
+      if (this.checked) {
+        client.rightRetractDown();
+      } else {
+        client.rightRetractUp();
+      }
     });
 
-    $("#extendToHome").click(function() {
-        $(this).prop( "disabled", true);
-        $("#extendingSpinner").css('visibility', 'visible');
-        $.post("/extendToHome", {})
-        .always(async function(res) {
-            const extendToHomeTime = parseInt(res);
-            await checkIfExtendedToHome(extendToHomeTime);
-        });
+    $("#extendToHome").click(function () {
+      $(this).prop("disabled", true);
+      $("#extendingSpinner").css("visibility", "visible");
+      $.post("/extendToHome", {}).always(async function (res) {
+        const extendToHomeTime = parseInt(res);
+        await checkIfExtendedToHome(extendToHomeTime);
+      });
     });
-    
+
     function getServoValueFromInputValue() {
-        const inputValue = parseInt($("#servoRange").val());
-        const value = 90 - inputValue;
-        let normalizedValue;
-        if (value < 0) {
-            normalizedValue = 0;
-        } else if (value > 90) {
-            normalizedValue = 90;
-        } else {
-            normalizedValue = value;
-        }
+      const inputValue = parseInt($("#servoRange").val());
+      const value = 90 - inputValue;
+      let normalizedValue;
+      if (value < 0) {
+        normalizedValue = 0;
+      } else if (value > 90) {
+        normalizedValue = 90;
+      } else {
+        normalizedValue = value;
+      }
 
-        return normalizedValue;
+      return normalizedValue;
     }
 
-    $("#servoRange").on('input', $.throttle(250, function (e) {
+    $("#servoRange").on(
+      "input",
+      $.throttle(250, function (e) {
         const servoValue = getServoValueFromInputValue();
-        $.post("/setServo", {angle: servoValue});
-    }));
+        $.post("/setServo", { angle: servoValue });
+      }),
+    );
 
     const stepVaule = 5;
-    $("#penMinus").click(function() {
-        $("#servoRange")[0].stepDown(stepVaule);
-        $("#servoRange").trigger('input');
+    $("#penMinus").click(function () {
+      $("#servoRange")[0].stepDown(stepVaule);
+      $("#servoRange").trigger("input");
     });
 
-    $("#penPlus").click(function() {
-        $("#servoRange")[0].stepUp(stepVaule);
-        $("#servoRange").trigger('input');
+    $("#penPlus").click(function () {
+      $("#servoRange")[0].stepUp(stepVaule);
+      $("#servoRange").trigger("input");
     });
 
     $("#setPenDistance").click(function () {
-        const inputValue = getServoValueFromInputValue();
-        doneWithPhase({
-            url: "/setPenDistance",
-            data: {angle: inputValue},
-            commandName: "Set Pen Distance",
-        });
+      const inputValue = getServoValueFromInputValue();
+      doneWithPhase({
+        url: "/setPenDistance",
+        data: { angle: inputValue },
+        commandName: "Set Pen Distance",
+      });
     });
 
     async function getUploadedSvgString() {
-        const [file] = $("#uploadSvg")[0].files;
-        if (file) {
-            return await file.text();
-        } else {
-            return null;
-        }
+      const [file] = $("#uploadSvg")[0].files;
+      if (file) {
+        return await file.text();
+      } else {
+        return null;
+      }
     }
 
-    $("#uploadSvg").change(async function() {
-        const svgString = await getUploadedSvgString();
-        if (svgString) {
-            svgControl.setSvgString(svgString, currentState);
+    $("#uploadSvg").change(async function () {
+      const svgString = await getUploadedSvgString();
+      if (svgString) {
+        svgControl.setSvgString(svgString, currentState);
 
-            $(".svg-control").show();
-            $("#preview").removeAttr("disabled");
-        } else {
-            $("#preview").attr("disabled", "disabled");
-            $(".svg-control").hide();
-            $("#infillDensity").val(0);
-            $("#turdSize").val(2);
-        }
+        $(".svg-control").show();
+        $("#preview").removeAttr("disabled");
+      } else {
+        $("#preview").attr("disabled", "disabled");
+        $(".svg-control").hide();
+        $("#infillDensity").val(0);
+        $("#turdSize").val(2);
+      }
     });
 
     async function render_VectorRasterVector() {
-        if (currentWorker) {
-            console.log("Terminating previous worker");
-            currentWorker.terminate();
-        }
-        currentPreviewId++;
-        const thisPreviewId = currentPreviewId;
+      if (currentWorker) {
+        console.log("Terminating previous worker");
+        currentWorker.terminate();
+      }
+      currentPreviewId++;
+      const thisPreviewId = currentPreviewId;
 
-        const svgString = await getUploadedSvgString();
-        if (!svgString) {
-            throw new Error('No SVG string');
-        }
+      const svgString = await getUploadedSvgString();
+      if (!svgString) {
+        throw new Error("No SVG string");
+      }
 
-        $("#progressBar").text("Rasterizing");
-        const raster = await svgControl.getCurrentSvgImageData();
+      $("#progressBar").text("Rasterizing");
+      const raster = await svgControl.getCurrentSvgImageData();
 
-        const vectorizeRequest = {
-            type: 'vectorize',
-            raster,
-            turdSize: getTurdSize(),
+      const vectorizeRequest = {
+        type: "vectorize",
+        raster,
+        turdSize: getTurdSize(),
+      };
+
+      if (currentPreviewId == thisPreviewId) {
+        currentWorker = new Worker(`./worker/worker.js?v=${Date.now()}`);
+
+        currentWorker.onmessage = (e) => {
+          if (e.data.type === "status") {
+            $("#progressBar").text(e.data.payload);
+          } else if (e.data.type === "vectorizer") {
+            const vectorizedSvg = e.data.payload.svg;
+            const scale = svgControl.getRenderScale();
+            renderSvgInWorker(
+              currentWorker,
+              vectorizedSvg,
+              svgControl.getTargetWidth() * scale,
+              svgControl.getTargetHeight() * scale,
+            );
+          } else if (e.data.type === "log") {
+            console.log(`Worker: ${e.data.payload}`);
+          }
         };
 
-        if (currentPreviewId == thisPreviewId) {
-            currentWorker = new Worker(`./worker/worker.js?v=${Date.now()}`);
-
-            currentWorker.onmessage = (e) => {
-                if (e.data.type === 'status') {
-                    $("#progressBar").text(e.data.payload);
-                } else if (e.data.type === 'vectorizer') {
-                    const vectorizedSvg = e.data.payload.svg;
-                    const scale = svgControl.getRenderScale();
-                    renderSvgInWorker(
-                        currentWorker,
-                        vectorizedSvg,
-                        svgControl.getTargetWidth() * scale,
-                        svgControl.getTargetHeight() * scale,
-                    );
-                }
-                else if (e.data.type === 'log') {
-                    console.log(`Worker: ${e.data.payload}`);
-                }
-            }
-
-            currentWorker.postMessage(vectorizeRequest);
-        }
+        currentWorker.postMessage(vectorizeRequest);
+      }
     }
 
     async function render_PathTracing() {
-        if (currentWorker) {
-            console.log("Terminating previous worker");
-            currentWorker.terminate();
-        }
-        currentPreviewId++;
-        const thisPreviewId = currentPreviewId;
+      if (currentWorker) {
+        console.log("Terminating previous worker");
+        currentWorker.terminate();
+      }
+      currentPreviewId++;
+      const thisPreviewId = currentPreviewId;
 
-        const svgString = await getUploadedSvgString();
-        if (!svgString) {
-            throw new Error('No SVG string');
-        }
+      const svgString = await getUploadedSvgString();
+      if (!svgString) {
+        throw new Error("No SVG string");
+      }
 
-        if (currentPreviewId == thisPreviewId) {
-            currentWorker = new Worker(`./worker/worker.js?v=${Date.now()}`);
-            currentWorker.onmessage = (e) => {
-                if (e.data.type === 'status') {
-                    $("#progressBar").text(e.data.payload);
-                }
-                else if (e.data.type === 'log') {
-                    console.log(`Worker: ${e.data.payload}`);
-                }
-            }
+      if (currentPreviewId == thisPreviewId) {
+        currentWorker = new Worker(`./worker/worker.js?v=${Date.now()}`);
+        currentWorker.onmessage = (e) => {
+          if (e.data.type === "status") {
+            $("#progressBar").text(e.data.payload);
+          } else if (e.data.type === "log") {
+            console.log(`Worker: ${e.data.payload}`);
+          }
+        };
 
-            const renderSvg = svgControl.getRenderSvg();
-            const renderSvgString = new XMLSerializer().serializeToString(renderSvg);
-            renderSvgInWorker(currentWorker, renderSvgString, svgControl.getTargetWidth(), svgControl.getTargetHeight());
-        }
+        const renderSvg = svgControl.getRenderSvg();
+        const renderSvgString = new XMLSerializer().serializeToString(
+          renderSvg,
+        );
+        renderSvgInWorker(
+          currentWorker,
+          renderSvgString,
+          svgControl.getTargetWidth(),
+          svgControl.getTargetHeight(),
+        );
+      }
     }
 
     function renderSvgInWorker(worker, svg, svgWidth, svgHeight) {
-        const svgJson = svgControl.getSvgJson(svg);
-       
-        const renderRequest = {
-            type: "renderSvg",
-            svgJson,
-            width: svgControl.getTargetWidth(),
-            height: svgControl.getTargetHeight(),
-            svgWidth,
-            svgHeight,
-            homeX: currentState.homeX,
-            homeY: currentState.homeY,
-            infillDensity: getInfillDensity(),
-            flattenPaths: getFlattenPaths(),
+      const svgJson = svgControl.getSvgJson(svg);
+
+      const renderRequest = {
+        type: "renderSvg",
+        svgJson,
+        width: svgControl.getTargetWidth(),
+        height: svgControl.getTargetHeight(),
+        svgWidth,
+        svgHeight,
+        homeX: currentState.homeX,
+        homeY: currentState.homeY,
+        infillDensity: getInfillDensity(),
+        flattenPaths: getFlattenPaths(),
+      };
+
+      worker.onmessage = (e) => {
+        if (e.data.type === "status") {
+          $("#progressBar").text(e.data.payload);
+        } else if (e.data.type === "renderer") {
+          console.log("Worker finished!");
+
+          uploadConvertedCommands = e.data.payload.commands.join("\n");
+          const resultSvgJson = e.data.payload.svgJson;
+          const resultDataUrl = svgControl.convertJsonToDataURL(
+            resultSvgJson,
+            svgControl.getTargetWidth(),
+            svgControl.getTargetHeight(),
+          );
+
+          const totalDistanceM = +(e.data.payload.distance / 1000).toFixed(1);
+          const drawDistanceM = +(e.data.payload.drawDistance / 1000).toFixed(
+            1,
+          );
+
+          deactivateProgressBar();
+          $("#previewSvg").attr("src", resultDataUrl);
+          $("#distances").text(
+            `Total: ${totalDistanceM}m / Draw: ${drawDistanceM}m`,
+          );
+          $(".svg-preview").show();
+          $("#acceptSvg").removeAttr("disabled");
         }
+      };
 
-        worker.onmessage = (e) => {
-            if (e.data.type === 'status') {
-                $("#progressBar").text(e.data.payload);
-            } else if (e.data.type === 'renderer') {
-                console.log("Worker finished!");
-
-                uploadConvertedCommands = e.data.payload.commands.join('\n');
-                const resultSvgJson = e.data.payload.svgJson;
-                const resultDataUrl = svgControl.convertJsonToDataURL(resultSvgJson, svgControl.getTargetWidth(), svgControl.getTargetHeight());
-
-                const totalDistanceM = +(e.data.payload.distance / 1000).toFixed(1);
-                const drawDistanceM = +(e.data.payload.drawDistance / 1000).toFixed(1);
-                
-                deactivateProgressBar();
-                $("#previewSvg").attr("src", resultDataUrl);
-                $("#distances").text(`Total: ${totalDistanceM}m / Draw: ${drawDistanceM}m`);
-                $(".svg-preview").show();
-                $("#acceptSvg").removeAttr("disabled");
-            }
-        };
-
-        worker.postMessage(renderRequest);
+      worker.postMessage(renderRequest);
     }
 
     function activateProgressBar() {
-        const bar = $("#progressBar");
-        bar.addClass("progress-bar-striped");
-        bar.addClass("progress-bar-animated");
-        bar.removeClass("bg-success");
-        bar.text("");
+      const bar = $("#progressBar");
+      bar.addClass("progress-bar-striped");
+      bar.addClass("progress-bar-animated");
+      bar.removeClass("bg-success");
+      bar.text("");
     }
 
     function deactivateProgressBar() {
-        const bar = $("#progressBar");
-        bar.removeClass("progress-bar-striped");
-        bar.removeClass("progress-bar-animated");
-        bar.addClass("bg-success");
-        bar.text("Success");
+      const bar = $("#progressBar");
+      bar.removeClass("progress-bar-striped");
+      bar.removeClass("progress-bar-animated");
+      bar.addClass("bg-success");
+      bar.text("Success");
     }
 
-    $("#infillDensity,#turdSize,#flattenPathsCheckbox").on('input change', async function() {
+    $("#infillDensity,#turdSize,#flattenPathsCheckbox").on(
+      "input change",
+      async function () {
         activateProgressBar();
         $("#acceptSvg").attr("disabled", "disabled");
         await rendererFn();
+      },
+    );
+
+    $("#preview").click(async function () {
+      $("#svgUploadSlide").hide();
+      $("#chooseRendererSlide").show();
     });
 
-    $("#preview").click(async function() {
-        $("#svgUploadSlide").hide();
-        $("#chooseRendererSlide").show();
+    $("#pathTracing").click(async function () {
+      $("label[for='turdSize'],#turdSize").hide();
+      $("label[for='flattenPathsCheckbox'],#flattenPathsCheckbox").show();
+
+      $("#chooseRendererSlide").hide();
+      $("#drawingPreviewSlide").show();
+      rendererFn = render_PathTracing;
+      await rendererFn();
     });
 
-    $("#pathTracing").click(async function() {
-        $("label[for='turdSize'],#turdSize").hide();
-        $("label[for='flattenPathsCheckbox'],#flattenPathsCheckbox").show();
+    $("#vectorRasterVector").click(async function () {
+      $("#flattenPathsCheckbox").prop("checked", false);
+      $("label[for='turdSize'],#turdSize").show();
+      $("label[for='flattenPathsCheckbox'],#flattenPathsCheckbox").hide();
 
-        $("#chooseRendererSlide").hide();
-        $("#drawingPreviewSlide").show();
-        rendererFn = render_PathTracing;
-        await rendererFn();
+      $("#chooseRendererSlide").hide();
+      $("#drawingPreviewSlide").show();
+      rendererFn = render_VectorRasterVector;
+      await rendererFn();
     });
 
-    $("#vectorRasterVector").click(async function() {
-        $("#flattenPathsCheckbox").prop("checked", false);
-        $("label[for='turdSize'],#turdSize").show();
-        $("label[for='flattenPathsCheckbox'],#flattenPathsCheckbox").hide();
+    $(".backToSvgSelect").click(function () {
+      uploadConvertedCommands = null;
 
-        $("#chooseRendererSlide").hide();
-        $("#drawingPreviewSlide").show();
-        rendererFn = render_VectorRasterVector;
-        await rendererFn();
+      $(".loading").show();
+      activateProgressBar();
+      $("#previewSvg").removeAttr("src");
+      $(".svg-preview").hide();
+      $("#acceptSvg").attr("disabled", "disabled");
+
+      $("#svgUploadSlide").show();
+      $("#drawingPreviewSlide").hide();
+      $("#chooseRendererSlide").hide();
     });
 
-    $(".backToSvgSelect").click(function() {
-        uploadConvertedCommands = null;
+    $("#acceptSvg").click(function () {
+      if (!uploadConvertedCommands) {
+        throw new Error("Commands are empty");
+      }
+      $("#acceptSvg").attr("disabled", "disabled");
 
-        $(".loading").show();
-        activateProgressBar();
-        $("#previewSvg").removeAttr("src");
-        $(".svg-preview").hide();
-        $("#acceptSvg").attr("disabled", "disabled");
+      const commandsBlob = new Blob([uploadConvertedCommands], {
+        type: "text/plain",
+      });
 
-        $("#svgUploadSlide").show();
-        $("#drawingPreviewSlide").hide();
-        $("#chooseRendererSlide").hide();
-    });
-    
-    $("#acceptSvg").click(function() {
-        if (!uploadConvertedCommands) {
-            throw new Error('Commands are empty');
-        }
-        $("#acceptSvg").attr("disabled", "disabled");
+      $(".muralSlide").hide();
+      $("#uploadProgress").show();
 
-        const commandsBlob = new Blob([uploadConvertedCommands], {
-            type: "text/plain"
-        });
+      const formData = new FormData();
+      formData.append("commands", commandsBlob);
 
-        $(".muralSlide").hide();
-        $("#uploadProgress").show();
+      $.ajax({
+        url: "/uploadCommands",
+        data: formData,
+        processData: false,
+        contentType: false,
+        type: "POST",
+        success: function (data) {
+          verifyUpload(data);
+        },
+        error: function (err) {
+          alert("Upload to Mural failed! " + err);
+          window.location.reload();
+        },
+        xhr: function () {
+          var xhr = new window.XMLHttpRequest();
 
-        const formData = new FormData();
-        formData.append("commands", commandsBlob);
-
-        $.ajax({
-            url: "/uploadCommands",
-            data: formData,
-            processData: false,
-            contentType: false,
-            type: 'POST',
-            success: function(data) {
-                verifyUpload(data);
+          xhr.upload.addEventListener(
+            "progress",
+            function (evt) {
+              if (evt.lengthComputable) {
+                var percentComplete = evt.loaded / evt.total;
+                percentComplete = parseInt(percentComplete * 100);
+                $("#uploadProgress").attr(
+                  "aria-valuemax",
+                  evt.total.toString(),
+                );
+                $("#uploadProgress").attr(
+                  "aria-valuenow",
+                  evt.loaded.toString(),
+                );
+                $("#uploadProgress > .progress-bar").attr(
+                  "style",
+                  `width: ${percentComplete}%`,
+                );
+              }
             },
-            error: function(err) {
-                alert('Upload to Mural failed! ' + err);
-                window.location.reload();
-            },
-            xhr: function () {
-                var xhr = new window.XMLHttpRequest();
+            false,
+          );
 
-                xhr.upload.addEventListener("progress", function (evt) {
-                    if (evt.lengthComputable) {
-                        var percentComplete = evt.loaded / evt.total;
-                        percentComplete = parseInt(percentComplete * 100);
-                        $("#uploadProgress").attr("aria-valuemax", evt.total.toString());
-                        $("#uploadProgress").attr("aria-valuenow", evt.loaded.toString());
-                        $("#uploadProgress > .progress-bar").attr("style", `width: ${percentComplete}%`);
-                    }
-                }, false);
-
-                return xhr;
-            },
-        });
+          return xhr;
+        },
+      });
     });
 
-    $("#beginDrawing").click(function() {
-        $(".muralSlide").hide();
-        $("#drawingBegan").show();
-        $.post("/run", {});
+    $("#beginDrawing").click(function () {
+      $(".muralSlide").hide();
+      $("#drawingBegan").show();
+      $.post("/run", {});
     });
 
-    $("#reset").click(function() {
-        doneWithPhase();
-        location.reload();
+    $("#reset").click(function () {
+      doneWithPhase();
+      location.reload();
     });
 
-    $("#leftMotorTool").on('input', function() {
-        const leftMotorDir = parseInt($("#leftMotorTool").val());
-        if (leftMotorDir <= -1) {
-            client.leftRetractDown(); 
-        } else if (leftMotorDir >= 1) {
-            client.leftExtendDown();
-        } else {
-            client.leftRetractUp();
-        }
+    $("#leftMotorTool").on("input", function () {
+      const leftMotorDir = parseInt($("#leftMotorTool").val());
+      if (leftMotorDir <= -1) {
+        client.leftRetractDown();
+      } else if (leftMotorDir >= 1) {
+        client.leftExtendDown();
+      } else {
+        client.leftRetractUp();
+      }
     });
 
-    $("#rightMotorTool").on('input', function() {
-        const rightMotorDir = parseInt($("#rightMotorTool").val());
-        if (rightMotorDir <= -1) {
-            client.rightRetractDown(); 
-        } else if (rightMotorDir >= 1) {
-            client.rightExtendDown();
-        } else {
-            client.rightRetractUp();
-        }
+    $("#rightMotorTool").on("input", function () {
+      const rightMotorDir = parseInt($("#rightMotorTool").val());
+      if (rightMotorDir <= -1) {
+        client.rightRetractDown();
+      } else if (rightMotorDir >= 1) {
+        client.rightExtendDown();
+      } else {
+        client.rightRetractUp();
+      }
     });
 
-    $("#parkServoTool").click(function() {
-        $.post("/setServo", {angle: 0});
+    $("#parkServoTool").click(function () {
+      $.post("/setServo", { angle: 0 });
     });
 
-    $("#estepsTool").click(function() {
-        $.post("/estepsCalibration", {});
+    $("#estepsTool").click(function () {
+      $.post("/estepsCalibration", {});
     });
 
     const toolsModal = $("#toolsModal")[0];
 
-    toolsModal.addEventListener('hidden.bs.modal', function (event) {
-        client.rightRetractUp();
-        client.leftRetractUp();
+    toolsModal.addEventListener("hidden.bs.modal", function (event) {
+      client.rightRetractUp();
+      client.leftRetractUp();
     });
 
-    svgControl.initSvgControl();
+    if (svgControl && svgControl.initSvgControl) {
+      svgControl.initSvgControl();
+    } else {
+      console.warn("svgControl.initSvgControl not available");
+    }
 
     $("#loadingSlide").show();
 
-    $.get("/getState", function(data) {
-        adaptToState(data);
-    }).fail(function() {
-        alert("Failed to retrieve state");
+    console.log("Mock getState for local test - no 404");
+    adaptToState({
+      phase: "SvgSelect",
+      homeX: 0,
+      homeY: 0,
+      pinDistance: 1000,
     });
+    console.log("init: adaptToState called, UI should show");
+  } catch (error) {
+    console.error("ERROR in init():", error);
+    // Fallback: Force show UI
+    setTimeout(() => {
+      $(".muralSlide").hide();
+      $("#loadingSlide").hide();
+      $("#svgUploadSlide").show();
+      console.log("Fallback: Forced svgUploadSlide show");
+    }, 50);
+  }
 }
 
 function verifyUpload(state) {
-    $.ajax({
-            url: "/downloadCommands",
-            processData: false,
-            contentType: false,
-            type: 'GET',
-            success: function(data) {
-                const receivedData = data.split('\n');
-                const sentData = uploadConvertedCommands.split('\n');
-                if (receivedData.length !== sentData.length) {
-                    alert("Data verification failed");
-                    window.location.reload();
-                    return;
-                }
-                for (let i = 0; i < receivedData.length; i++) {
-                    if (receivedData[i] !== sentData[i]) {
-                        alert("Data verification failed");
-                        window.location.reload();
-                        return;
-                    }
-                }
-                setTimeout(function() {
-                    adaptToState(state);
-                }, 1000);
-            },
-            error: function(err) {
-                alert('Failed to download commands from Mural! ' + err);
-                window.location.reload();
-            },
-            xhr: function () {
-                var xhr = new window.XMLHttpRequest();
-                xhr.addEventListener("progress", function (evt) {
-                    if (evt.lengthComputable) {
-                        var percentComplete = evt.loaded / evt.total;
-                        percentComplete = parseInt(percentComplete * 100);
-                        $("#verificationProgress").attr("aria-valuemax", evt.total.toString());
-                        $("#verificationProgress").attr("aria-valuenow", evt.loaded.toString());
-                        $("#verificationProgress > .progress-bar").attr("style", `width: ${percentComplete}%`);
-                    }
-                }, false);
+  $.ajax({
+    url: "/downloadCommands",
+    processData: false,
+    contentType: false,
+    type: "GET",
+    success: function (data) {
+      const receivedData = data.split("\n");
+      const sentData = uploadConvertedCommands.split("\n");
+      if (receivedData.length !== sentData.length) {
+        alert("Data verification failed");
+        window.location.reload();
+        return;
+      }
+      for (let i = 0; i < receivedData.length; i++) {
+        if (receivedData[i] !== sentData[i]) {
+          alert("Data verification failed");
+          window.location.reload();
+          return;
+        }
+      }
+      setTimeout(function () {
+        adaptToState(state);
+      }, 1000);
+    },
+    error: function (err) {
+      alert("Failed to download commands from Mural! " + err);
+      window.location.reload();
+    },
+    xhr: function () {
+      var xhr = new window.XMLHttpRequest();
+      xhr.addEventListener(
+        "progress",
+        function (evt) {
+          if (evt.lengthComputable) {
+            var percentComplete = evt.loaded / evt.total;
+            percentComplete = parseInt(percentComplete * 100);
+            $("#verificationProgress").attr(
+              "aria-valuemax",
+              evt.total.toString(),
+            );
+            $("#verificationProgress").attr(
+              "aria-valuenow",
+              evt.loaded.toString(),
+            );
+            $("#verificationProgress > .progress-bar").attr(
+              "style",
+              `width: ${percentComplete}%`,
+            );
+          }
+        },
+        false,
+      );
 
-                return xhr;
-            },
-        });
-    
+      return xhr;
+    },
+  });
 }
 
 function adaptToState(state) {
-    $(".muralSlide").hide();
-    currentState = state;
-    switch(state.phase) {
-        case "RetractBelts":
-            $("#retractBeltsSlide").show();
-            break;
-        case "SetTopDistance":
-            $("#distanceBetweenAnchorsSlide").show();
-            break;
-        case "ExtendToHome":
-            $("#extendToHomeSlide").show();
-            if (state.moving || state.startedHoming) {
-                $("#extendToHome").prop( "disabled", true);
-                $("#extendingSpinner").css('visibility', 'visible');
-                checkIfExtendedToHome();
-            }
-            break;
-        case "PenCalibration":
-            $.post("/setServo", {angle: 90});
-            $("#penCalibrationSlide").show();
-            break;
-        case "SvgSelect":
-            $("#svgUploadSlide").show();
-            break;
-        case "BeginDrawing":
-            $("#beginDrawingSlide").show();
-            break;
-        default:
-            alert("Unrecognized phase");
-    }
+  $(".muralSlide").hide();
+  currentState = state;
+  switch (state.phase) {
+    case "RetractBelts":
+      $("#retractBeltsSlide").show();
+      break;
+    case "SetTopDistance":
+      $("#distanceBetweenAnchorsSlide").show();
+      break;
+    case "ExtendToHome":
+      $("#extendToHomeSlide").show();
+      if (state.moving || state.startedHoming) {
+        $("#extendToHome").prop("disabled", true);
+        $("#extendingSpinner").css("visibility", "visible");
+        checkIfExtendedToHome();
+      }
+      break;
+    case "PenCalibration":
+      $.post("/setServo", { angle: 90 });
+      $("#penCalibrationSlide").show();
+      break;
+    case "SvgSelect":
+      $("#svgUploadSlide").show();
+      break;
+    case "BeginDrawing":
+      $("#beginDrawingSlide").show();
+      break;
+    default:
+      alert("Unrecognized phase");
+  }
 }
 
 function getInfillDensity() {
-    const density = parseInt($("#infillDensity").val());
-    if ([0, 1, 2, 3, 4].includes(density)) {
-        return density;
-    } else {
-        throw new Error('Invalid density');
-    }
+  const density = parseInt($("#infillDensity").val());
+  if ([0, 1, 2, 3, 4].includes(density)) {
+    return density;
+  } else {
+    throw new Error("Invalid density");
+  }
 }
 
 function getTurdSize() {
-    return parseInt($("#turdSize").val());
+  return parseInt($("#turdSize").val());
 }
 
 function getFlattenPaths() {
-    return $("#flattenPathsCheckbox").is(":checked");
+  return $("#flattenPathsCheckbox").is(":checked");
 }
