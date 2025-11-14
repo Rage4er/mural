@@ -4,39 +4,28 @@ import * as client from './client.js';
 let currentState = null;
 let currentWorker = null;
 let uploadConvertedCommands = null;
-
-// === КЭШИРОВАННЫЕ DOM-ЭЛЕМЕНТЫ ===
-const domCache = {
-    progressBar: null,
-    previewSvg: null,
-    distances: null,
-    acceptSvg: null,
-    uploadSvg: null,
-    infillDensity: null,
-    turdSize: null,
-    flattenPathsCheckbox: null,
-    svgUploadSlide: null,
-    drawingPreviewSlide: null,
-    chooseRendererSlide: null
-};
-
-// === ЕДИНЫЙ ЛОГГЕР ===
-const logger = {
-    info: (message, data = null) => {
-        console.log(`[INFO] ${message}`, data ? data : '');
-    },
-    error: (message, error = null) => {
-        console.error(`[ERROR] ${message}`, error ? error : '');
-    },
-    warn: (message, data = null) => {
-        console.warn(`[WARN] ${message}`, data ? data : '');
-    }
-};
+let currentPreviewId = 0;
+let rendererFn = null;
 
 // === G-CODE SUPPORT FUNCTIONS ===
+function activateProgressBar() {
+    const bar = $("#progressBar");
+    bar.addClass("progress-bar-striped");
+    bar.addClass("progress-bar-animated");
+    bar.removeClass("bg-success");
+    bar.text("");
+}
+
+function deactivateProgressBar() {
+    const bar = $("#progressBar");
+    bar.removeClass("progress-bar-striped");
+    bar.removeClass("progress-bar-animated");
+    bar.addClass("bg-success");
+    bar.text("Success");
+}
+
 function handleGcodeFileUpload(file) {
     const reader = new FileReader();
-    
     reader.onload = function(e) {
         const gcodeContent = e.target.result;
         
@@ -50,45 +39,39 @@ function handleGcodeFileUpload(file) {
         };
 
         if (currentWorker) {
-            logger.info("Terminating previous worker");
+            console.log("Terminating previous worker");
             currentWorker.terminate();
         }
         
-        window.currentPreviewId++;
-        const thisPreviewId = window.currentPreviewId;
+        currentPreviewId++;
+        const thisPreviewId = currentPreviewId;
         
-        if (window.currentPreviewId === thisPreviewId) {
+        if (currentPreviewId == thisPreviewId) {
             currentWorker = new Worker('./worker/worker.js?v=' + Date.now());
-            
             currentWorker.onmessage = (e) => {
                 if (e.data.type === 'status') {
-                    domCache.progressBar.text(e.data.payload);
+                    $("#progressBar").text(e.data.payload);
                 } else if (e.data.type === 'renderer') {
-                    logger.info("G-code rendering finished!");
+                    console.log("G-code rendering finished!");
 
                     uploadConvertedCommands = e.data.payload.commands.join('\n');
                     const resultSvgJson = e.data.payload.svgJson;
-                    const resultDataUrl = svgControl.convertJsonToDataURL(
-                        resultSvgJson, 
-                        svgControl.getTargetWidth(), 
-                        svgControl.getTargetHeight()
-                    );
+                    const resultDataUrl = svgControl.convertJsonToDataURL(resultSvgJson, svgControl.getTargetWidth(), svgControl.getTargetHeight());
 
                     const totalDistanceM = +(e.data.payload.distance / 1000).toFixed(1);
                     const drawDistanceM = +(e.data.payload.drawDistance / 1000).toFixed(1);
                     
                     deactivateProgressBar();
-                    domCache.previewSvg.attr("src", resultDataUrl);
-                    domCache.distances.text(`Total: ${totalDistanceM}m / Draw: ${drawDistanceM}m`);
+                    $("#previewSvg").attr("src", resultDataUrl);
+                    $("#distances").text('Total: ' + totalDistanceM + 'm / Draw: ' + drawDistanceM + 'm');
                     $(".svg-preview").show();
-                    domCache.acceptSvg.removeAttr("disabled");
+                    $("#acceptSvg").removeAttr("disabled");
                 }
             };
             
             currentWorker.postMessage(renderRequest);
         }
     };
-    
     reader.readAsText(file);
 }
 
@@ -98,13 +81,12 @@ function addGcodeUploadButton() {
     gcodeInput.id = 'uploadGcode';
     gcodeInput.accept = '.gcode,.nc,.txt';
     gcodeInput.style.display = 'none';
-    
     gcodeInput.addEventListener('change', function(e) {
         if (this.files.length > 0) {
-            domCache.svgUploadSlide.hide();
-            domCache.drawingPreviewSlide.show();
+            $("#svgUploadSlide").hide();
+            $("#drawingPreviewSlide").show();
             activateProgressBar();
-            domCache.acceptSvg.attr("disabled", "disabled");
+            $("#acceptSvg").attr("disabled", "disabled");
             handleGcodeFileUpload(this.files[0]);
         }
     });
@@ -115,44 +97,27 @@ function addGcodeUploadButton() {
     gcodeButton.type = 'button';
     gcodeButton.className = 'w-100 btn btn-lg btn-outline-primary mb-2';
     gcodeButton.innerHTML = '<i class="bi bi-code-slash"></i> Upload G-code';
-    
     gcodeButton.addEventListener('click', function() {
         gcodeInput.click();
     });
     
-    if (domCache.uploadSvg) {
-        domCache.uploadSvg.parentNode.insertBefore(gcodeButton, domCache.uploadSvg.nextSibling);
+    const uploadSvgInput = document.querySelector('#uploadSvg');
+    if (uploadSvgInput) {
+        uploadSvgInput.parentNode.insertBefore(gcodeButton, uploadSvgInput.nextSibling);
     }
 }
 
-// === ИНИЦИАЛИЗАЦИЯ КЭША DOM-ЭЛЕМЕНТОВ ===
-function initializeDomCache() {
-    domCache.progressBar = $("#progressBar");
-    domCache.previewSvg = $("#previewSvg");
-    domCache.distances = $("#distances");
-    domCache.acceptSvg = $("#acceptSvg");
-    domCache.uploadSvg = document.querySelector('#uploadSvg');
-    domCache.infillDensity = $("#infillDensity");
-    domCache.turdSize = $("#turdSize");
-    domCache.flattenPathsCheckbox = $("#flattenPathsCheckbox");
-    domCache.svgUploadSlide = $("#svgUploadSlide");
-    domCache.drawingPreviewSlide = $("#drawingPreviewSlide");
-    domCache.chooseRendererSlide = $("#chooseRendererSlide");
-}
-
-// === ORIGINAL MURAL CODE - OPTIMIZED ===
 window.onload = function () {
-    initializeDomCache();
     init();
     addGcodeUploadButton();
 };
 
+// === ORIGINAL MURAL FUNCTIONS ===
 async function checkIfExtendedToHome(extendToHomeTime) {
     await new Promise(r => setTimeout(r, extendToHomeTime * 1000));
 
     const waitPeriod = 2000;
     let done = false;
-    
     while (!done) {
         try {
             const state = await $.get("/getState");
@@ -163,7 +128,6 @@ async function checkIfExtendedToHome(extendToHomeTime) {
                 await new Promise(r => setTimeout(r, waitPeriod));
             }
         } catch (err) {
-            logger.error("Failed to get current phase", err);
             alert("Failed to get current phase: " + err);
             location.reload();
         }
@@ -174,7 +138,6 @@ function init() {
     function doneWithPhase(custom) {
         $(".muralSlide").hide();
         $("#loadingSlide").show();
-        
         if (!custom) {
             custom = {
                 url: "/doneWithPhase",
@@ -227,9 +190,8 @@ function init() {
     });
 
     $("#extendToHome").click(function() {
-        $(this).prop("disabled", true);
+        $(this).prop( "disabled", true);
         $("#extendingSpinner").css('visibility', 'visible');
-        
         $.post("/extendToHome", {})
         .always(async function(res) {
             const extendToHomeTime = parseInt(res);
@@ -240,10 +202,16 @@ function init() {
     function getServoValueFromInputValue() {
         const inputValue = parseInt($("#servoRange").val());
         const value = 90 - inputValue;
-        
-        if (value < 0) return 0;
-        if (value > 90) return 90;
-        return value;
+        let normalizedValue;
+        if (value < 0) {
+            normalizedValue = 0;
+        } else if (value > 90) {
+            normalizedValue = 90;
+        } else {
+            normalizedValue = value;
+        }
+
+        return normalizedValue;
     }
 
     $("#servoRange").on('input', $.throttle(250, function (e) {
@@ -251,14 +219,14 @@ function init() {
         $.post("/setServo", {angle: servoValue});
     }));
 
-    const stepValue = 5;
+    const stepVaule = 5;
     $("#penMinus").click(function() {
-        $("#servoRange")[0].stepDown(stepValue);
+        $("#servoRange")[0].stepDown(stepVaule);
         $("#servoRange").trigger('input');
     });
 
     $("#penPlus").click(function() {
-        $("#servoRange")[0].stepUp(stepValue);
+        $("#servoRange")[0].stepUp(stepVaule);
         $("#servoRange").trigger('input');
     });
 
@@ -273,43 +241,42 @@ function init() {
 
     async function getUploadedSvgString() {
         const [file] = $("#uploadSvg")[0].files;
-        return file ? await file.text() : null;
+        if (file) {
+            return await file.text();
+        } else {
+            return null;
+        }
     }
 
     $("#uploadSvg").change(async function() {
         const svgString = await getUploadedSvgString();
-        
         if (svgString) {
             svgControl.setSvgString(svgString, currentState);
+
             $(".svg-control").show();
             $("#preview").removeAttr("disabled");
         } else {
             $("#preview").attr("disabled", "disabled");
             $(".svg-control").hide();
-            domCache.infillDensity.val(0);
-            domCache.turdSize.val(2);
+            $("#infillDensity").val(0);
+            $("#turdSize").val(2);
         }
     });
 
-    // Глобальные переменные для рендеринга
-    window.currentPreviewId = 0;
-    window.currentRendererFunction = null;
-
     async function render_VectorRasterVector() {
         if (currentWorker) {
-            logger.info("Terminating previous worker");
+            console.log("Terminating previous worker");
             currentWorker.terminate();
         }
-        
-        window.currentPreviewId++;
-        const thisPreviewId = window.currentPreviewId;
+        currentPreviewId++;
+        const thisPreviewId = currentPreviewId;
 
         const svgString = await getUploadedSvgString();
         if (!svgString) {
             throw new Error('No SVG string');
         }
 
-        domCache.progressBar.text("Rasterizing");
+        $("#progressBar").text("Rasterizing");
         const raster = await svgControl.getCurrentSvgImageData();
 
         const vectorizeRequest = {
@@ -318,12 +285,12 @@ function init() {
             turdSize: getTurdSize(),
         };
 
-        if (window.currentPreviewId === thisPreviewId) {
+        if (currentPreviewId == thisPreviewId) {
             currentWorker = new Worker(`./worker/worker.js?v=${Date.now()}`);
 
             currentWorker.onmessage = (e) => {
                 if (e.data.type === 'status') {
-                    domCache.progressBar.text(e.data.payload);
+                    $("#progressBar").text(e.data.payload);
                 } else if (e.data.type === 'vectorizer') {
                     const vectorizedSvg = e.data.payload.svg;
                     const scale = svgControl.getRenderScale();
@@ -333,10 +300,11 @@ function init() {
                         svgControl.getTargetWidth() * scale,
                         svgControl.getTargetHeight() * scale,
                     );
-                } else if (e.data.type === 'log') {
-                    logger.info(`Worker: ${e.data.payload}`);
                 }
-            };
+                else if (e.data.type === 'log') {
+                    console.log(`Worker: ${e.data.payload}`);
+                }
+            }
 
             currentWorker.postMessage(vectorizeRequest);
         }
@@ -344,37 +312,31 @@ function init() {
 
     async function render_PathTracing() {
         if (currentWorker) {
-            logger.info("Terminating previous worker");
+            console.log("Terminating previous worker");
             currentWorker.terminate();
         }
-        
-        window.currentPreviewId++;
-        const thisPreviewId = window.currentPreviewId;
+        currentPreviewId++;
+        const thisPreviewId = currentPreviewId;
 
         const svgString = await getUploadedSvgString();
         if (!svgString) {
             throw new Error('No SVG string');
         }
 
-        if (window.currentPreviewId === thisPreviewId) {
+        if (currentPreviewId == thisPreviewId) {
             currentWorker = new Worker(`./worker/worker.js?v=${Date.now()}`);
-            
             currentWorker.onmessage = (e) => {
                 if (e.data.type === 'status') {
-                    domCache.progressBar.text(e.data.payload);
-                } else if (e.data.type === 'log') {
-                    logger.info(`Worker: ${e.data.payload}`);
+                    $("#progressBar").text(e.data.payload);
                 }
-            };
+                else if (e.data.type === 'log') {
+                    console.log(`Worker: ${e.data.payload}`);
+                }
+            }
 
             const renderSvg = svgControl.getRenderSvg();
             const renderSvgString = new XMLSerializer().serializeToString(renderSvg);
-            renderSvgInWorker(
-                currentWorker, 
-                renderSvgString, 
-                svgControl.getTargetWidth(), 
-                svgControl.getTargetHeight()
-            );
+            renderSvgInWorker(currentWorker, renderSvgString, svgControl.getTargetWidth(), svgControl.getTargetHeight());
         }
     }
 
@@ -392,80 +354,62 @@ function init() {
             homeY: currentState.homeY,
             infillDensity: getInfillDensity(),
             flattenPaths: getFlattenPaths(),
-        };
+        }
 
         worker.onmessage = (e) => {
             if (e.data.type === 'status') {
-                domCache.progressBar.text(e.data.payload);
+                $("#progressBar").text(e.data.payload);
             } else if (e.data.type === 'renderer') {
-                logger.info("Worker finished!");
+                console.log("Worker finished!");
 
                 uploadConvertedCommands = e.data.payload.commands.join('\n');
                 const resultSvgJson = e.data.payload.svgJson;
-                const resultDataUrl = svgControl.convertJsonToDataURL(
-                    resultSvgJson, 
-                    svgControl.getTargetWidth(), 
-                    svgControl.getTargetHeight()
-                );
+                const resultDataUrl = svgControl.convertJsonToDataURL(resultSvgJson, svgControl.getTargetWidth(), svgControl.getTargetHeight());
 
                 const totalDistanceM = +(e.data.payload.distance / 1000).toFixed(1);
                 const drawDistanceM = +(e.data.payload.drawDistance / 1000).toFixed(1);
                 
                 deactivateProgressBar();
-                domCache.previewSvg.attr("src", resultDataUrl);
-                domCache.distances.text(`Total: ${totalDistanceM}m / Draw: ${drawDistanceM}m`);
+                $("#previewSvg").attr("src", resultDataUrl);
+                $("#distances").text(`Total: ${totalDistanceM}m / Draw: ${drawDistanceM}m`);
                 $(".svg-preview").show();
-                domCache.acceptSvg.removeAttr("disabled");
+                $("#acceptSvg").removeAttr("disabled");
             }
         };
 
         worker.postMessage(renderRequest);
     }
 
-    function activateProgressBar() {
-        domCache.progressBar
-            .addClass("progress-bar-striped progress-bar-animated")
-            .removeClass("bg-success")
-            .text("");
-    }
-
-    function deactivateProgressBar() {
-        domCache.progressBar
-            .removeClass("progress-bar-striped progress-bar-animated")
-            .addClass("bg-success")
-            .text("Success");
-    }
-
-    $("#infillDensity, #turdSize, #flattenPathsCheckbox").on('input change', async function() {
+    $("#infillDensity,#turdSize,#flattenPathsCheckbox").on('input change', async function() {
         activateProgressBar();
-        domCache.acceptSvg.attr("disabled", "disabled");
-        await window.currentRendererFunction();
+        $("#acceptSvg").attr("disabled", "disabled");
+        await rendererFn();
     });
 
     $("#preview").click(async function() {
-        domCache.svgUploadSlide.hide();
-        domCache.chooseRendererSlide.show();
+        $("#svgUploadSlide").hide();
+        $("#chooseRendererSlide").show();
     });
 
     $("#pathTracing").click(async function() {
-        $("label[for='turdSize'], #turdSize").hide();
-        $("label[for='flattenPathsCheckbox'], #flattenPathsCheckbox").show();
+        $("label[for='turdSize'],#turdSize").hide();
+        $("label[for='flattenPathsCheckbox'],#flattenPathsCheckbox").show();
 
-        domCache.chooseRendererSlide.hide();
-        domCache.drawingPreviewSlide.show();
-        window.currentRendererFunction = render_PathTracing;
-        await window.currentRendererFunction();
+        $("#chooseRendererSlide").hide();
+        $("#drawingPreviewSlide").show();
+        rendererFn = render_PathTracing;
+        await rendererFn();
     });
 
     $("#vectorRasterVector").click(async function() {
-        domCache.flattenPathsCheckbox.prop("checked", false);
-        $("label[for='turdSize'], #turdSize").show();
-        $("label[for='flattenPathsCheckbox'], #flattenPathsCheckbox").hide();
+        $("#flattenPathsCheckbox").prop("checked", false);
+        $("label[for='turdSize'],#turdSize").show();
+        $("label[for='flattenPathsCheckbox'],#flattenPathsCheckbox").hide();
 
-        domCache.chooseRendererSlide.hide();
-        domCache.drawingPreviewSlide.show();
-        window.currentRendererFunction = render_VectorRasterVector;
-        await window.currentRendererFunction();
+        $("#chooseRendererSlide").hide();
+        $("#drawingPreviewSlide").show();
+        rendererFn = render_VectorRasterVector;
+        await rendererFn();
     });
 
     $(".backToSvgSelect").click(function() {
@@ -473,21 +417,20 @@ function init() {
 
         $(".loading").show();
         activateProgressBar();
-        domCache.previewSvg.removeAttr("src");
+        $("#previewSvg").removeAttr("src");
         $(".svg-preview").hide();
-        domCache.acceptSvg.attr("disabled", "disabled");
+        $("#acceptSvg").attr("disabled", "disabled");
 
-        domCache.svgUploadSlide.show();
-        domCache.drawingPreviewSlide.hide();
-        domCache.chooseRendererSlide.hide();
+        $("#svgUploadSlide").show();
+        $("#drawingPreviewSlide").hide();
+        $("#chooseRendererSlide").hide();
     });
     
     $("#acceptSvg").click(function() {
         if (!uploadConvertedCommands) {
             throw new Error('Commands are empty');
         }
-        
-        domCache.acceptSvg.attr("disabled", "disabled");
+        $("#acceptSvg").attr("disabled", "disabled");
 
         const commandsBlob = new Blob([uploadConvertedCommands], {
             type: "text/plain"
@@ -509,22 +452,19 @@ function init() {
                 verifyUpload(data);
             },
             error: function(err) {
-                logger.error('Upload to Mural failed!', err);
                 alert('Upload to Mural failed! ' + err);
                 window.location.reload();
             },
             xhr: function () {
-                const xhr = new window.XMLHttpRequest();
+                var xhr = new window.XMLHttpRequest();
 
                 xhr.upload.addEventListener("progress", function (evt) {
                     if (evt.lengthComputable) {
-                        const percentComplete = evt.loaded / evt.total;
-                        const percentCompleteInt = parseInt(percentComplete * 100);
-                        $("#uploadProgress")
-                            .attr("aria-valuemax", evt.total.toString())
-                            .attr("aria-valuenow", evt.loaded.toString())
-                            .find(".progress-bar")
-                            .attr("style", `width: ${percentCompleteInt}%`);
+                        var percentComplete = evt.loaded / evt.total;
+                        percentComplete = parseInt(percentComplete * 100);
+                        $("#uploadProgress").attr("aria-valuemax", evt.total.toString());
+                        $("#uploadProgress").attr("aria-valuenow", evt.loaded.toString());
+                        $("#uploadProgress > .progress-bar").attr("style", `width: ${percentComplete}%`);
                     }
                 }, false);
 
@@ -575,96 +515,73 @@ function init() {
     });
 
     const toolsModal = $("#toolsModal")[0];
+
     toolsModal.addEventListener('hidden.bs.modal', function (event) {
         client.rightRetractUp();
         client.leftRetractUp();
     });
 
     svgControl.initSvgControl();
+
     $("#loadingSlide").show();
 
-
-    // === ЗАКОММЕНТИРОВАТЬ ЭТО ===
-// $.get("/getState", function(data) {
-//     adaptToState(data);
-// }).fail(function() {
-//     logger.error("Failed to retrieve state");
-//     alert("Failed to retrieve state");
-// });
+    $.get("/getState", function(data) {
+        adaptToState(data);
+    }).fail(function() {
+        alert("Failed to retrieve state");
+    });
+}
 
 function verifyUpload(state) {
     $.ajax({
-        url: "/downloadCommands",
-        processData: false,
-        contentType: false,
-        type: 'GET',
-        success: function(data) {
-            const receivedData = data.split('\n');
-            const sentData = uploadConvertedCommands.split('\n');
-            
-            if (receivedData.length !== sentData.length) {
-                alert("Data verification failed");
-                window.location.reload();
-                return;
-            }
-            
-            for (let i = 0; i < receivedData.length; i++) {
-                if (receivedData[i] !== sentData[i]) {
+            url: "/downloadCommands",
+            processData: false,
+            contentType: false,
+            type: 'GET',
+            success: function(data) {
+                const receivedData = data.split('\n');
+                const sentData = uploadConvertedCommands.split('\n');
+                if (receivedData.length !== sentData.length) {
                     alert("Data verification failed");
                     window.location.reload();
                     return;
                 }
-            }
-            
-            setTimeout(function() {
-                adaptToState(state);
-            }, 1000);
-        },
-        error: function(err) {
-            logger.error('Failed to download commands from Mural!', err);
-            alert('Failed to download commands from Mural! ' + err);
-            window.location.reload();
-        },
-        xhr: function () {
-            const xhr = new window.XMLHttpRequest();
-            
-            xhr.addEventListener("progress", function (evt) {
-                if (evt.lengthComputable) {
-                    const percentComplete = evt.loaded / evt.total;
-                    const percentCompleteInt = parseInt(percentComplete * 100);
-                    $("#verificationProgress")
-                        .attr("aria-valuemax", evt.total.toString())
-                        .attr("aria-valuenow", evt.loaded.toString())
-                        .find(".progress-bar")
-                        .attr("style", `width: ${percentCompleteInt}%`);
+                for (let i = 0; i < receivedData.length; i++) {
+                    if (receivedData[i] !== sentData[i]) {
+                        alert("Data verification failed");
+                        window.location.reload();
+                        return;
+                    }
                 }
-            }, false);
+                setTimeout(function() {
+                    adaptToState(state);
+                }, 1000);
+            },
+            error: function(err) {
+                alert('Failed to download commands from Mural! ' + err);
+                window.location.reload();
+            },
+            xhr: function () {
+                var xhr = new window.XMLHttpRequest();
+                xhr.addEventListener("progress", function (evt) {
+                    if (evt.lengthComputable) {
+                        var percentComplete = evt.loaded / evt.total;
+                        percentComplete = parseInt(percentComplete * 100);
+                        $("#verificationProgress").attr("aria-valuemax", evt.total.toString());
+                        $("#verificationProgress").attr("aria-valuenow", evt.loaded.toString());
+                        $("#verificationProgress > .progress-bar").attr("style", `width: ${percentComplete}%`);
+                    }
+                }, false);
 
-            return xhr;
-        },
-    });
-}
-
-// === ВРЕМЕННЫЙ МОК ДЛЯ ТЕСТИРОВАНИЯ ФРОНТЕНДА ===
-function getMockState() {
-    return {
-        phase: "SvgSelect",
-        homeX: 100,
-        homeY: 100,
-        moving: false,
-        startedHoming: false
-    };
+                return xhr;
+            },
+        });
+    
 }
 
 function adaptToState(state) {
     $(".muralSlide").hide();
     currentState = state;
-    
-    // Для тестирования всегда показываем SVG загрузку
-    domCache.svgUploadSlide.show();
-    
-    // Раскомментируйте для полной эмуляции, когда понадобится:
-    /*
     switch(state.phase) {
         case "RetractBelts":
             $("#retractBeltsSlide").show();
@@ -675,7 +592,7 @@ function adaptToState(state) {
         case "ExtendToHome":
             $("#extendToHomeSlide").show();
             if (state.moving || state.startedHoming) {
-                $("#extendToHome").prop("disabled", true);
+                $("#extendToHome").prop( "disabled", true);
                 $("#extendingSpinner").css('visibility', 'visible');
                 checkIfExtendedToHome();
             }
@@ -685,35 +602,18 @@ function adaptToState(state) {
             $("#penCalibrationSlide").show();
             break;
         case "SvgSelect":
-            domCache.svgUploadSlide.show();
+            $("#svgUploadSlide").show();
             break;
         case "BeginDrawing":
             $("#beginDrawingSlide").show();
             break;
         default:
-            logger.warn("Unrecognized phase", state.phase);
             alert("Unrecognized phase");
     }
-    */
 }
 
-// Закомментируем реальный запрос к бэкенду и используем мок
-// $.get("/getState", function(data) {
-//     adaptToState(data);
-// }).fail(function() {
-//     logger.error("Failed to retrieve state");
-//     alert("Failed to retrieve state");
-// });
-
-// Используем мок-данные для тестирования
-setTimeout(() => {
-    const mockState = getMockState();
-    adaptToState(mockState);
-    logger.info("Using mock state for frontend testing", mockState);
-}, 100);
-
 function getInfillDensity() {
-    const density = parseInt(domCache.infillDensity.val());
+    const density = parseInt($("#infillDensity").val());
     if ([0, 1, 2, 3, 4].includes(density)) {
         return density;
     } else {
@@ -722,10 +622,9 @@ function getInfillDensity() {
 }
 
 function getTurdSize() {
-    return parseInt(domCache.turdSize.val());
+    return parseInt($("#turdSize").val());
 }
 
 function getFlattenPaths() {
-    return domCache.flattenPathsCheckbox.is(":checked");
-}
+    return $("#flattenPathsCheckbox").is(":checked");
 }
