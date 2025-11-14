@@ -1,4 +1,4 @@
-﻿import * as svgControl from './svgControl.js';
+import * as svgControl from './svgControl.js';
 import * as client from './client.js';
 
 let currentState = null;
@@ -7,23 +7,12 @@ let uploadConvertedCommands = null;
 let currentPreviewId = 0;
 let rendererFn = null;
 
-// === G-CODE SUPPORT FUNCTIONS ===
-function activateProgressBar() {
-    const bar = $("#progressBar");
-    bar.addClass("progress-bar-striped");
-    bar.addClass("progress-bar-animated");
-    bar.removeClass("bg-success");
-    bar.text("");
-}
+window.onload = function () {
+    init();
+    addGcodeUploadButton();
+};
 
-function deactivateProgressBar() {
-    const bar = $("#progressBar");
-    bar.removeClass("progress-bar-striped");
-    bar.removeClass("progress-bar-animated");
-    bar.addClass("bg-success");
-    bar.text("Success");
-}
-
+// === НОВАЯ ФУНКЦИЯ: Обработка загрузки G-code ===
 function handleGcodeFileUpload(file) {
     const reader = new FileReader();
     reader.onload = function(e) {
@@ -47,7 +36,7 @@ function handleGcodeFileUpload(file) {
         const thisPreviewId = currentPreviewId;
         
         if (currentPreviewId == thisPreviewId) {
-            currentWorker = new Worker('./worker/worker.js?v=' + Date.now());
+            currentWorker = new Worker(`./worker/worker.js?v=${Date.now()}`);
             currentWorker.onmessage = (e) => {
                 if (e.data.type === 'status') {
                     $("#progressBar").text(e.data.payload);
@@ -63,7 +52,7 @@ function handleGcodeFileUpload(file) {
                     
                     deactivateProgressBar();
                     $("#previewSvg").attr("src", resultDataUrl);
-                    $("#distances").text('Total: ' + totalDistanceM + 'm / Draw: ' + drawDistanceM + 'm');
+                    $("#distances").text(`Total: ${totalDistanceM}m / Draw: ${drawDistanceM}m`);
                     $(".svg-preview").show();
                     $("#acceptSvg").removeAttr("disabled");
                 }
@@ -75,6 +64,7 @@ function handleGcodeFileUpload(file) {
     reader.readAsText(file);
 }
 
+// === НОВАЯ ФУНКЦИЯ: Добавление кнопки G-code ===
 function addGcodeUploadButton() {
     const gcodeInput = document.createElement('input');
     gcodeInput.type = 'file';
@@ -107,12 +97,6 @@ function addGcodeUploadButton() {
     }
 }
 
-window.onload = function () {
-    init();
-    addGcodeUploadButton();
-};
-
-// === ORIGINAL MURAL FUNCTIONS ===
 async function checkIfExtendedToHome(extendToHomeTime) {
     await new Promise(r => setTimeout(r, extendToHomeTime * 1000));
 
@@ -378,6 +362,22 @@ function init() {
         };
 
         worker.postMessage(renderRequest);
+    }
+
+    function activateProgressBar() {
+        const bar = $("#progressBar");
+        bar.addClass("progress-bar-striped");
+        bar.addClass("progress-bar-animated");
+        bar.removeClass("bg-success");
+        bar.text("");
+    }
+
+    function deactivateProgressBar() {
+        const bar = $("#progressBar");
+        bar.removeClass("progress-bar-striped");
+        bar.removeClass("progress-bar-animated");
+        bar.addClass("bg-success");
+        bar.text("Success");
     }
 
     $("#infillDensity,#turdSize,#flattenPathsCheckbox").on('input change', async function() {
